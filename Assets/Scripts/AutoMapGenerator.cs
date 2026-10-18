@@ -3,12 +3,16 @@ using System.Collections.Generic;
 
 public class AutoMapGenerator : MonoBehaviour
 {
+    [Header("0. Thiết lập Player")]
+    public Transform player; // Kéo GameObject Player vào đây
+    public bool autoMovePlayerToStart = true; // Tự động dịch Player về điểm xuất phát khi tạo map và khi ấn Play
+
     [Header("1. Kích thước bản đồ tùy ý")]
-    public int width = 50;
-    public int height = 34;
+    public int width = 70; // Kích thước map mở rộng
+    public int height = 50;
 
     [Header("2. Thiết lập con đường mòn")]
-    [Range(1, 3)]
+    [Range(1, 4)]
     public int roadWidth = 2;
 
     [Header("3. Mật độ rừng cây")]
@@ -16,7 +20,7 @@ public class AutoMapGenerator : MonoBehaviour
     public float forestDensity = 0.40f;
 
     [Header("4. Bề rộng dòng sông")]
-    [Range(2, 4)]
+    [Range(2, 6)]
     public int riverWidth = 3;
 
     [Header("5. Sprite Nền")]
@@ -59,6 +63,79 @@ public class AutoMapGenerator : MonoBehaviour
         "Trigger_Q20_TramKiemLamReflection"
     };
 
+    private bool hasPositionedPlayer = false;
+
+    private void Start()
+    {
+        if (autoMovePlayerToStart)
+        {
+            RepositionPlayerToStart();
+        }
+    }
+
+    private void Update()
+    {
+        // Chờ 1 frame đầu tiên sau Start để ghi đè mọi script di chuyển hoặc script load vị trí khác
+        if (!hasPositionedPlayer && autoMovePlayerToStart)
+        {
+            RepositionPlayerToStart();
+            hasPositionedPlayer = true;
+        }
+    }
+
+    /// <summary>
+    /// Đưa Player và Camera về đúng tọa độ xuất phát góc dưới bên trái của đường mòn
+    /// </summary>
+    public void RepositionPlayerToStart()
+    {
+        if (player == null)
+        {
+            GameObject foundPlayer = GameObject.FindGameObjectWithTag("Player");
+            if (foundPlayer != null)
+            {
+                player = foundPlayer.transform;
+            }
+        }
+
+        if (player != null)
+        {
+            int halfW = width / 2;
+            int halfH = height / 2;
+            Vector3 targetPos = new Vector3(-halfW + 3, -halfH + 3, 0);
+
+            player.position = targetPos;
+
+            // Xóa sạch vận tốc và cập nhật trực tiếp tọa độ của Rigidbody2D
+            Rigidbody2D rb = player.GetComponent<Rigidbody2D>();
+            if (rb != null)
+            {
+                rb.velocity = Vector2.zero;
+                rb.angularVelocity = 0f;
+                rb.position = targetPos;
+            }
+
+            // Đồng bộ Camera lập tức tới vị trí nhân vật (tránh lướt từ giữa map)
+            if (Camera.main != null)
+            {
+                CameraFollow camFollow = Camera.main.GetComponent<CameraFollow>();
+                if (camFollow != null)
+                {
+                    camFollow.SnapToTarget();
+                }
+                else
+                {
+                    Camera.main.transform.position = new Vector3(targetPos.x, targetPos.y, Camera.main.transform.position.z);
+                }
+            }
+
+            Debug.Log($"<color=green>[Spawn Success]</color> Đã đặt Player về vị trí: {targetPos}");
+        }
+        else
+        {
+            Debug.LogError("<color=red>[Spawn Error]</color> Chưa tìm thấy GameObject Player!");
+        }
+    }
+
     [ContextMenu("Generate Map 2")]
     public void GenerateMap()
     {
@@ -91,6 +168,7 @@ public class AutoMapGenerator : MonoBehaviour
         Vector2Int bridgeSouthPos = new Vector2Int(0, bridgeSouthY);
         Vector2Int bridgeNorthPos = new Vector2Int(0, bridgeNorthY);
 
+        // Tạo dòng sông
         for (int y = -halfH; y <= halfH; y++)
         {
             int curveX = 0;
@@ -106,10 +184,22 @@ public class AutoMapGenerator : MonoBehaviour
             }
         }
 
-        Vector2 pStart = new Vector2(-halfW + 4, -halfH + 4);
+        // Tọa độ các điểm chính (Start ở góc dưới cùng bên trái)
+        Vector2 pStart = new Vector2(-halfW + 3, -halfH + 3);
         Vector2 pFork = new Vector2(-halfW * 0.5f, -halfH * 0.15f);
         Vector2 pMerge = new Vector2(halfW * 0.5f, halfH * 0.35f);
-        Vector2 pEndHouse = new Vector2(halfW - 6, halfH - 6);
+        Vector2 pEndHouse = new Vector2(halfW - 5, halfH - 5);
+
+        // Tạo SpawnPoint trực quan trong Hierarchy
+        GameObject spawnPointObj = new GameObject("Player_SpawnPoint");
+        spawnPointObj.transform.position = new Vector3(pStart.x, pStart.y, 0);
+        spawnPointObj.transform.SetParent(this.transform);
+
+        // Di chuyển Player nếu tùy chọn này bật
+        if (autoMovePlayerToStart)
+        {
+            RepositionPlayerToStart();
+        }
 
         List<Vector2> pathSouth = new List<Vector2>
         {
@@ -152,21 +242,29 @@ public class AutoMapGenerator : MonoBehaviour
         DrawConnectedPath(pathNorth, roadCoords);
         DrawConnectedPath(pathNorthExit, roadCoords);
 
+        // Xóa sạch cây cối xung quanh vị trí Player xuất hiện
+        int clearRadius = 2;
+        for (int cx = -clearRadius; cx <= clearRadius; cx++)
+        {
+            for (int cy = -clearRadius; cy <= clearRadius; cy++)
+            {
+                roadCoords.Add(new Vector2Int(Mathf.RoundToInt(pStart.x) + cx, Mathf.RoundToInt(pStart.y) + cy));
+            }
+        }
+
         RegisterBridgeWalkway(bridgeSouthPos, roadCoords, bridgeCorridor);
         RegisterBridgeWalkway(bridgeNorthPos, roadCoords, bridgeCorridor);
 
+        // Thiết lập các trạm sự kiện
         Vector2Int[] stations = new Vector2Int[10];
         stations[0] = Vector2Int.RoundToInt(pStart);
         stations[1] = Vector2Int.RoundToInt(new Vector2(-halfW * 0.75f, -halfH * 0.4f));
-
         stations[2] = new Vector2Int(-riverWidth - 3, bridgeSouthY);
         stations[3] = new Vector2Int(-riverWidth - 1, bridgeSouthY);
-        stations[6] = new Vector2Int(riverWidth + 2, bridgeSouthY);
-
         stations[4] = Vector2Int.RoundToInt(new Vector2(-halfW * 0.45f, halfH * 0.25f));
         stations[5] = new Vector2Int(-riverWidth - 1, bridgeNorthY);
+        stations[6] = new Vector2Int(riverWidth + 2, bridgeSouthY);
         stations[7] = Vector2Int.RoundToInt(new Vector2(halfW * 0.25f, halfH * 0.65f));
-
         stations[8] = Vector2Int.RoundToInt(pMerge);
         stations[9] = Vector2Int.RoundToInt(pEndHouse);
 
@@ -189,6 +287,10 @@ public class AutoMapGenerator : MonoBehaviour
             CircleCollider2D col = trg.AddComponent<CircleCollider2D>();
             col.radius = 1.3f;
             col.isTrigger = true;
+
+            // Tự động gắn script kích hoạt tự động mở Quiz khi chạm vào
+            AutoQuizTrigger quizTrigger = trg.AddComponent<AutoQuizTrigger>();
+            quizTrigger.questionID = $"Q{11 + i}"; // Tự động cấu hình từ Q11 đến Q20
 
             Sprite specificProp = null;
             switch (i)
@@ -219,6 +321,7 @@ public class AutoMapGenerator : MonoBehaviour
             }
         }
 
+        // Tạo nền đất, nước và cây cối
         for (int x = -halfW; x <= halfW; x++)
         {
             for (int y = -halfH; y <= halfH; y++)
