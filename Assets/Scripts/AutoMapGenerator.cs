@@ -4,11 +4,11 @@ using System.Collections.Generic;
 public class AutoMapGenerator : MonoBehaviour
 {
     [Header("0. Thiết lập Player")]
-    public Transform player; // Kéo GameObject Player vào đây
-    public bool autoMovePlayerToStart = true; // Tự động dịch Player về điểm xuất phát khi tạo map và khi ấn Play
+    public Transform player;
+    public bool autoMovePlayerToStart = true;
 
     [Header("1. Kích thước bản đồ tùy ý")]
-    public int width = 70; // Kích thước map mở rộng
+    public int width = 70;
     public int height = 50;
 
     [Header("2. Thiết lập con đường mòn")]
@@ -31,7 +31,7 @@ public class AutoMapGenerator : MonoBehaviour
     [Header("6. Sprite Cầu & Đá sông")]
     public Sprite bridgeSprite;
     public Sprite riverRockSprite;
-    public Sprite triggerIconSprite;
+    public Sprite triggerIconSprite; // Kéo icon dấu chấm than đỏ vào đây
 
     [Header("7. Cây cối & Vật cản")]
     public Sprite[] treeObstacles;
@@ -75,7 +75,6 @@ public class AutoMapGenerator : MonoBehaviour
 
     private void Update()
     {
-        // Chờ 1 frame đầu tiên sau Start để ghi đè mọi script di chuyển hoặc script load vị trí khác
         if (!hasPositionedPlayer && autoMovePlayerToStart)
         {
             RepositionPlayerToStart();
@@ -83,18 +82,12 @@ public class AutoMapGenerator : MonoBehaviour
         }
     }
 
-    /// <summary>
-    /// Đưa Player và Camera về đúng tọa độ xuất phát góc dưới bên trái của đường mòn
-    /// </summary>
     public void RepositionPlayerToStart()
     {
         if (player == null)
         {
             GameObject foundPlayer = GameObject.FindGameObjectWithTag("Player");
-            if (foundPlayer != null)
-            {
-                player = foundPlayer.transform;
-            }
+            if (foundPlayer != null) player = foundPlayer.transform;
         }
 
         if (player != null)
@@ -105,7 +98,6 @@ public class AutoMapGenerator : MonoBehaviour
 
             player.position = targetPos;
 
-            // Xóa sạch vận tốc và cập nhật trực tiếp tọa độ của Rigidbody2D
             Rigidbody2D rb = player.GetComponent<Rigidbody2D>();
             if (rb != null)
             {
@@ -114,25 +106,12 @@ public class AutoMapGenerator : MonoBehaviour
                 rb.position = targetPos;
             }
 
-            // Đồng bộ Camera lập tức tới vị trí nhân vật (tránh lướt từ giữa map)
             if (Camera.main != null)
             {
                 CameraFollow camFollow = Camera.main.GetComponent<CameraFollow>();
-                if (camFollow != null)
-                {
-                    camFollow.SnapToTarget();
-                }
-                else
-                {
-                    Camera.main.transform.position = new Vector3(targetPos.x, targetPos.y, Camera.main.transform.position.z);
-                }
+                if (camFollow != null) camFollow.SnapToTarget();
+                else Camera.main.transform.position = new Vector3(targetPos.x, targetPos.y, Camera.main.transform.position.z);
             }
-
-            Debug.Log($"<color=green>[Spawn Success]</color> Đã đặt Player về vị trí: {targetPos}");
-        }
-        else
-        {
-            Debug.LogError("<color=red>[Spawn Error]</color> Chưa tìm thấy GameObject Player!");
         }
     }
 
@@ -153,9 +132,6 @@ public class AutoMapGenerator : MonoBehaviour
         Transform triggerParent = new GameObject("--- INTERACTION_TRIGGERS ---").transform;
         triggerParent.SetParent(this.transform);
 
-        Transform propsParent = new GameObject("Scenario_Props_Layer").transform;
-        propsParent.SetParent(this.transform);
-
         HashSet<Vector2Int> roadCoords = new HashSet<Vector2Int>();
         HashSet<Vector2Int> riverCoords = new HashSet<Vector2Int>();
         HashSet<Vector2Int> bridgeCorridor = new HashSet<Vector2Int>();
@@ -168,15 +144,11 @@ public class AutoMapGenerator : MonoBehaviour
         Vector2Int bridgeSouthPos = new Vector2Int(0, bridgeSouthY);
         Vector2Int bridgeNorthPos = new Vector2Int(0, bridgeNorthY);
 
-        // Tạo dòng sông
         for (int y = -halfH; y <= halfH; y++)
         {
             int curveX = 0;
             bool nearBridge = Mathf.Abs(y - bridgeSouthY) <= 2 || Mathf.Abs(y - bridgeNorthY) <= 2;
-            if (!nearBridge)
-            {
-                curveX = Mathf.RoundToInt(Mathf.Sin(y * 0.2f) * 1.8f);
-            }
+            if (!nearBridge) curveX = Mathf.RoundToInt(Mathf.Sin(y * 0.2f) * 1.8f);
 
             for (int rx = -riverWidth / 2; rx <= riverWidth / 2; rx++)
             {
@@ -184,65 +156,23 @@ public class AutoMapGenerator : MonoBehaviour
             }
         }
 
-        // Tọa độ các điểm chính (Start ở góc dưới cùng bên trái)
         Vector2 pStart = new Vector2(-halfW + 3, -halfH + 3);
         Vector2 pFork = new Vector2(-halfW * 0.5f, -halfH * 0.15f);
         Vector2 pMerge = new Vector2(halfW * 0.5f, halfH * 0.35f);
         Vector2 pEndHouse = new Vector2(halfW - 5, halfH - 5);
 
-        // Tạo SpawnPoint trực quan trong Hierarchy
-        GameObject spawnPointObj = new GameObject("Player_SpawnPoint");
-        spawnPointObj.transform.position = new Vector3(pStart.x, pStart.y, 0);
-        spawnPointObj.transform.SetParent(this.transform);
+        if (autoMovePlayerToStart) RepositionPlayerToStart();
 
-        // Di chuyển Player nếu tùy chọn này bật
-        if (autoMovePlayerToStart)
-        {
-            RepositionPlayerToStart();
-        }
-
-        List<Vector2> pathSouth = new List<Vector2>
-        {
-            pStart,
-            new Vector2(-halfW * 0.75f, -halfH * 0.4f),
-            pFork,
-            new Vector2(-riverWidth - 2, bridgeSouthY),
-            new Vector2(-riverWidth / 2f - 0.5f, bridgeSouthY)
-        };
-
-        List<Vector2> pathSouthExit = new List<Vector2>
-        {
-            new Vector2(riverWidth / 2f + 0.5f, bridgeSouthY),
-            new Vector2(riverWidth + 2, bridgeSouthY),
-            new Vector2(halfW * 0.25f, -halfH * 0.05f),
-            pMerge,
-            pEndHouse
-        };
-
-        List<Vector2> pathNorth = new List<Vector2>
-        {
-            pFork,
-            new Vector2(-halfW * 0.45f, halfH * 0.25f),
-            new Vector2(-halfW * 0.2f, halfH * 0.52f),
-            new Vector2(-riverWidth - 2, bridgeNorthY),
-            new Vector2(-riverWidth / 2f - 0.5f, bridgeNorthY)
-        };
-
-        List<Vector2> pathNorthExit = new List<Vector2>
-        {
-            new Vector2(riverWidth / 2f + 0.5f, bridgeNorthY),
-            new Vector2(riverWidth + 2, bridgeNorthY),
-            new Vector2(halfW * 0.25f, halfH * 0.65f),
-            new Vector2(halfW * 0.42f, halfH * 0.48f),
-            pMerge
-        };
+        List<Vector2> pathSouth = new List<Vector2> { pStart, new Vector2(-halfW * 0.75f, -halfH * 0.4f), pFork, new Vector2(-riverWidth - 2, bridgeSouthY), new Vector2(-riverWidth / 2f - 0.5f, bridgeSouthY) };
+        List<Vector2> pathSouthExit = new List<Vector2> { new Vector2(riverWidth / 2f + 0.5f, bridgeSouthY), new Vector2(riverWidth + 2, bridgeSouthY), new Vector2(halfW * 0.25f, -halfH * 0.05f), pMerge, pEndHouse };
+        List<Vector2> pathNorth = new List<Vector2> { pFork, new Vector2(-halfW * 0.45f, halfH * 0.25f), new Vector2(-halfW * 0.2f, halfH * 0.52f), new Vector2(-riverWidth - 2, bridgeNorthY), new Vector2(-riverWidth / 2f - 0.5f, bridgeNorthY) };
+        List<Vector2> pathNorthExit = new List<Vector2> { new Vector2(riverWidth / 2f + 0.5f, bridgeNorthY), new Vector2(riverWidth + 2, bridgeNorthY), new Vector2(halfW * 0.25f, halfH * 0.65f), new Vector2(halfW * 0.42f, halfH * 0.48f), pMerge };
 
         DrawConnectedPath(pathSouth, roadCoords);
         DrawConnectedPath(pathSouthExit, roadCoords);
         DrawConnectedPath(pathNorth, roadCoords);
         DrawConnectedPath(pathNorthExit, roadCoords);
 
-        // Xóa sạch cây cối xung quanh vị trí Player xuất hiện
         int clearRadius = 2;
         for (int cx = -clearRadius; cx <= clearRadius; cx++)
         {
@@ -255,7 +185,6 @@ public class AutoMapGenerator : MonoBehaviour
         RegisterBridgeWalkway(bridgeSouthPos, roadCoords, bridgeCorridor);
         RegisterBridgeWalkway(bridgeNorthPos, roadCoords, bridgeCorridor);
 
-        // Thiết lập các trạm sự kiện
         Vector2Int[] stations = new Vector2Int[10];
         stations[0] = Vector2Int.RoundToInt(pStart);
         stations[1] = Vector2Int.RoundToInt(new Vector2(-halfW * 0.75f, -halfH * 0.4f));
@@ -280,6 +209,7 @@ public class AutoMapGenerator : MonoBehaviour
                 }
             }
 
+            // 1. Trạm chính chứa Collider và Script Quiz
             GameObject trg = new GameObject(scenarioNames[i]);
             trg.transform.position = new Vector3(pos.x, pos.y, 0);
             trg.transform.SetParent(triggerParent);
@@ -288,10 +218,10 @@ public class AutoMapGenerator : MonoBehaviour
             col.radius = 1.3f;
             col.isTrigger = true;
 
-            // Tự động gắn script kích hoạt tự động mở Quiz khi chạm vào
             AutoQuizTrigger quizTrigger = trg.AddComponent<AutoQuizTrigger>();
-            quizTrigger.questionID = $"Q{11 + i}"; // Tự động cấu hình từ Q11 đến Q20
+            quizTrigger.questionID = $"Q{11 + i}";
 
+            // Lấy sprite tiểu cảnh riêng cho từng câu
             Sprite specificProp = null;
             switch (i)
             {
@@ -305,23 +235,35 @@ public class AutoMapGenerator : MonoBehaviour
                 case 8: specificProp = backpackSprite; break;
             }
 
-            SpriteRenderer sr = trg.AddComponent<SpriteRenderer>();
-            sr.sprite = specificProp != null ? specificProp : (triggerIconSprite != null ? triggerIconSprite : riverRockSprite);
-            sr.color = specificProp != null ? Color.white : new Color(1f, 0.95f, 0.35f, 1f);
-            sr.sortingOrder = 10;
+            // 2. Tạo đối tượng con hiển thị Tiểu cảnh (Con nai, đống lửa...) - Thu nhỏ tỷ lệ vừa vặn (0.45f)
+            GameObject propObj = new GameObject("Prop_Sprite");
+            propObj.transform.SetParent(trg.transform);
+            propObj.transform.localPosition = Vector3.zero;
+            propObj.transform.localScale = new Vector3(0.45f, 0.45f, 1f); // Thu nhỏ tiểu cảnh
 
-            if (specificProp != null)
+            SpriteRenderer psr = propObj.AddComponent<SpriteRenderer>();
+            psr.sprite = specificProp != null ? specificProp : riverRockSprite;
+            psr.color = Color.white;
+            psr.sortingOrder = 4;
+
+            // 3. Tạo đối tượng con hiển thị Dấu chấm than đỏ (!) - Thu nhỏ gọn gàng lơ lửng (0.25f)
+            if (triggerIconSprite != null)
             {
-                GameObject decor = new GameObject($"Decor_{scenarioNames[i]}");
-                decor.transform.position = new Vector3(pos.x + 0.8f, pos.y + 0.4f, 0);
-                decor.transform.SetParent(propsParent);
-                SpriteRenderer dsr = decor.AddComponent<SpriteRenderer>();
-                dsr.sprite = (riverRockSprite != null) ? riverRockSprite : specificProp;
-                dsr.sortingOrder = 4;
+                GameObject iconObj = new GameObject("Trigger_Icon");
+                iconObj.transform.SetParent(trg.transform);
+                iconObj.transform.localPosition = new Vector3(0, 0.7f, 0);
+                iconObj.transform.localScale = new Vector3(0.25f, 0.25f, 1f); // Thu nhỏ dấu chấm than
+
+                SpriteRenderer isr = iconObj.AddComponent<SpriteRenderer>();
+                isr.sprite = triggerIconSprite;
+                isr.color = Color.white;
+                isr.sortingOrder = 11;
+
+                quizTrigger.iconSpriteRenderer = isr;
             }
         }
 
-        // Tạo nền đất, nước và cây cối
+        // Tạo Map nền đất, nước, cây cối
         for (int x = -halfW; x <= halfW; x++)
         {
             for (int y = -halfH; y <= halfH; y++)
@@ -342,18 +284,8 @@ public class AutoMapGenerator : MonoBehaviour
 
                     if (!isBridgeTile)
                     {
-                        BoxCollider2D col = waterTile.AddComponent<BoxCollider2D>();
-                        col.size = Vector2.one;
-
-                        if (riverRockSprite != null && Random.value < 0.15f)
-                        {
-                            GameObject rock = new GameObject($"RiverRock_{x}_{y}");
-                            rock.transform.position = new Vector3(x, y, 0);
-                            rock.transform.SetParent(riverParent);
-                            SpriteRenderer rsr = rock.AddComponent<SpriteRenderer>();
-                            rsr.sprite = riverRockSprite;
-                            rsr.sortingOrder = -1;
-                        }
+                        BoxCollider2D waterCol = waterTile.AddComponent<BoxCollider2D>();
+                        waterCol.size = Vector2.one;
                     }
                 }
                 else
@@ -405,7 +337,6 @@ public class AutoMapGenerator : MonoBehaviour
     private void RegisterBridgeWalkway(Vector2Int bridgePos, HashSet<Vector2Int> roadSet, HashSet<Vector2Int> bridgeSet)
     {
         int halfRiver = riverWidth / 2;
-
         for (int x = bridgePos.x - halfRiver; x <= bridgePos.x + halfRiver; x++)
         {
             for (int y = bridgePos.y - 1; y <= bridgePos.y + 1; y++)
@@ -413,7 +344,6 @@ public class AutoMapGenerator : MonoBehaviour
                 bridgeSet.Add(new Vector2Int(x, y));
             }
         }
-
         for (int y = bridgePos.y - 1; y <= bridgePos.y + 1; y++)
         {
             roadSet.Add(new Vector2Int(bridgePos.x - halfRiver - 1, y));
@@ -426,10 +356,6 @@ public class AutoMapGenerator : MonoBehaviour
         GameObject bridge = new GameObject(name);
         bridge.transform.position = new Vector3(pos.x, pos.y, 0);
         bridge.transform.SetParent(parent);
-
-        bridge.transform.rotation = Quaternion.identity;
-        bridge.transform.localScale = Vector3.one;
-
         SpriteRenderer sr = bridge.AddComponent<SpriteRenderer>();
         sr.sprite = bridgeSprite;
         sr.sortingOrder = 2;
@@ -443,12 +369,10 @@ public class AutoMapGenerator : MonoBehaviour
             Vector2 b = waypoints[i + 1];
             float dist = Vector2.Distance(a, b);
             int steps = Mathf.Max(Mathf.RoundToInt(dist * 6f), 10);
-
             for (int s = 0; s <= steps; s++)
             {
                 float t = (float)s / steps;
                 Vector2 pos = Vector2.Lerp(a, b, t);
-
                 Vector2Int cell = new Vector2Int(Mathf.RoundToInt(pos.x), Mathf.RoundToInt(pos.y));
                 for (int rx = -roadWidth / 2; rx <= roadWidth / 2; rx++)
                 {
@@ -466,11 +390,9 @@ public class AutoMapGenerator : MonoBehaviour
         GameObject tree = new GameObject(isBorder ? $"BorderTree_{x}_{y}" : $"Tree_{x}_{y}");
         tree.transform.position = new Vector3(x, y, 0);
         tree.transform.SetParent(parent);
-
         SpriteRenderer sr = tree.AddComponent<SpriteRenderer>();
         sr.sprite = treeObstacles[Random.Range(0, treeObstacles.Length)];
         sr.sortingOrder = 3;
-
         BoxCollider2D col = tree.AddComponent<BoxCollider2D>();
         col.size = new Vector2(0.85f, 0.85f);
     }
