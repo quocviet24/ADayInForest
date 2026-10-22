@@ -109,8 +109,8 @@ public class AutoMapGenerator : MonoBehaviour
             if (Camera.main != null)
             {
                 CameraFollow camFollow = Camera.main.GetComponent<CameraFollow>();
-                if (camFollow != null) camFollow.SnapToTarget();
-                else Camera.main.transform.position = new Vector3(targetPos.x, targetPos.y, Camera.main.transform.position.z);
+                // if (camFollow != null) camFollow.SnapToTarget();
+                // else Camera.main.transform.position = new Vector3(targetPos.x, targetPos.y, Camera.main.transform.position.z);
             }
         }
     }
