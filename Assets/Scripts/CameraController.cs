@@ -6,54 +6,54 @@ public class CameraController : MonoBehaviour
     public static CameraController instance;
     private Camera cam;
     
-    private float defaultSize;
-    private Vector3 defaultPosition; // Lưu tọa độ gốc của Camera
+    [Header("Kích thước mặc định")]
+    public float defaultSize;
 
     void Awake()
     {
         instance = this;
         cam = GetComponent<Camera>();
         
-        defaultSize = cam.orthographicSize;
-        defaultPosition = transform.position; // Ghi nhớ vị trí ban đầu
+        // Tự động ghi nhận Size hiện tại làm Size gốc nếu chưa điền ở Inspector
+        if (defaultSize <= 0)
+        {
+            defaultSize = cam.orthographicSize;
+        }
     }
 
-    // Nhận thêm biến Transform target (vị trí của Player)
-    public void ZoomIn(float targetSize, float duration, Transform target)
+    /// <summary>
+    /// Thu nhỏ ống kính (Zoom In). Tham số target giữ lại để tương thích các script gọi từ trước.
+    /// </summary>
+    public void ZoomIn(float targetSize, float duration, Transform target = null)
     {
         StopAllCoroutines();
-        StartCoroutine(ZoomRoutine(targetSize, target.position, duration));
+        StartCoroutine(ZoomSizeRoutine(targetSize, duration));
     }
 
+    /// <summary>
+    /// Trả ống kính về kích thước ban đầu (Zoom Out).
+    /// </summary>
     public void ZoomOut(float duration)
     {
         StopAllCoroutines();
-        // Trả camera về kích thước và vị trí ban đầu
-        StartCoroutine(ZoomRoutine(defaultSize, defaultPosition, duration));
+        StartCoroutine(ZoomSizeRoutine(defaultSize, duration));
     }
 
-    IEnumerator ZoomRoutine(float targetSize, Vector3 targetPos, float duration)
+    /// <summary>
+    /// Chỉ thay đổi góc nhìn (orthographicSize), để CameraFollow toàn quyền bám sát Player.
+    /// </summary>
+    IEnumerator ZoomSizeRoutine(float targetSize, float duration)
     {
         float startSize = cam.orthographicSize;
-        Vector3 startPos = transform.position;
-        
-        // Khóa trục Z ở -10 (hoặc vị trí hiện tại) để camera không đâm xuyên qua map 2D
-        Vector3 finalPos = new Vector3(targetPos.x, targetPos.y, transform.position.z); 
-
         float time = 0;
         
         while (time < duration)
         {
-            // Vừa thu phóng...
             cam.orthographicSize = Mathf.Lerp(startSize, targetSize, time / duration);
-            // ...Vừa di chuyển Camera tới chỗ nhân vật
-            transform.position = Vector3.Lerp(startPos, finalPos, time / duration);
-            
             time += Time.deltaTime;
             yield return null;
         }
         
         cam.orthographicSize = targetSize;
-        transform.position = finalPos;
     }
 }
